@@ -9,7 +9,7 @@ from pybricks.robotics import DriveBase
 from pybricks.media.ev3dev import SoundFile
 import usocket as socket
 
-addr = ('192.168.1.2', 8000)
+addr = ('192.168.1.22', 8000)
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect(socket.getaddrinfo(*addr)[0][-1])
@@ -91,7 +91,7 @@ def move():
         robot.straight(30)
     will_arrive = False
     arrived = False
-
+ 
     while True:
         line = int((line_sensor.reflection() - BLACK) / (WHITE[0] - BLACK) * 100)
         left = int((left_sensor.reflection() - BLACK) / (WHITE[1] - BLACK) * 100)
@@ -100,10 +100,12 @@ def move():
         if left < 20 and right < 20:
             if not will_arrive:
                 will_arrive = True
+
         elif will_arrive and left > 80 and right > 80:
             robot.stop()
             will_arrive = False
             arrived = True
+
         else:
             deviation = line - THRESHOLD
             turn_rate = int(PROPORTIONAL_GAIN * deviation)
@@ -125,9 +127,14 @@ while True:
     data = client.recv(1024).decode()
     print(data)
 
-    if data == "end":
+    if data == "beep":
         ev3.speaker.beep()
-        client.send(b"received")
+        client.send(b"done")
+        continue
+
+    elif data == "yes":
+        ev3.speaker.say("yes")
+        client.send(b"done")
         continue
 
     elif data[:3] == "obs":

@@ -116,7 +116,7 @@ class Env(tk.Tk):
 
         x, y = origin_y + (UNIT * col), origin_x + (UNIT * row)
         font = (font, str(size), style)
-        text = self.canvas.create_text(x, y, fill="black", tex@id:ms-python.pythont=contents,
+        text = self.canvas.create_text(x, y, fill="black", text=contents,
                                        font=font, anchor=anchor)
         return self.texts.append(text)
 
@@ -150,7 +150,10 @@ class Env(tk.Tk):
     # 프로그램 화면 초기상태로 돌림
     def reset(self):
         self.update()
-        time.sleep(0.5)@id:ms-python.pythontart_coord[0] - y)
+        time.sleep(0.5)
+        x, y = self.canvas.coords(self.rectangle)
+        start_coord = self.state_to_cd(START_POINT)
+        self.canvas.move(self.rectangle, start_coord[1] - x, start_coord[0] - y)
         self.render()
         return self.cd_to_state(self.canvas.coords(self.rectangle)[::-1])
 
@@ -160,7 +163,10 @@ class Env(tk.Tk):
         base_action = np.array([0, 0])
         self.render()
 
-        # 선택된 액션에 따라 프로그램 상에 표시되는 도형이 움직일 @id:ms-python.python
+        # 선택된 액션에 따라 프로그램 상에 표시되는 도형이 움직일 변위(y, x)를 구함
+        if action == 0:  # 상
+            base_action[0] -= UNIT
+        elif action == 1:  # 하
             base_action[0] += UNIT
         elif action == 2:  # 좌
             base_action[1] -= UNIT
@@ -178,7 +184,7 @@ class Env(tk.Tk):
             reward = 50
             done = True
 
-        # 장애물과 충돌한 경우@id:ms-python.python
+        # 장애물과 충돌한 경우
         elif next_state in [self.canvas.coords(triangle)[::-1] for triangle in self.triangles]:
             reward = -10
             collided = True
@@ -244,7 +250,7 @@ class QLearningAgent:
                 if (i, j) not in OBSTACLES:
                     self.q_table[str([i, j])] = [.0] * len(self.actions)
 
-    # 맵 행렬을 생성 (시작점은 S, 장애물은 X, 도착점은 E, 나머지는@id:ms-python.python .)
+    # 맵 행렬을 생성 (시작점은 S, 장애물은 X, 도착점은 E, 나머지는 .)
     @staticmethod
     def make_grid():
         grid = np.full((HEIGHT, WIDTH), ".")
