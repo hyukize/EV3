@@ -96,9 +96,6 @@ def handle_socket():
             raise ValueError
 
 
-
-
-
 # 프로그램 화면 출력을 위한 함수 모음
 class Env(tk.Tk):
     def __init__(self):
@@ -106,7 +103,7 @@ class Env(tk.Tk):
         self.action_space = ['u', 'd', 'l', 'r']
         self.n_actions = len(self.action_space)
         self.title('Q Learning')
-        self.geometry('{0}x{1}'.format(HEIGHT * UNIT, HEIGHT * UNIT))
+        self.geometry('{0}x{1}'.format(WIDTH * UNIT, HEIGHT * UNIT))
         self.shapes = self.load_images()
         self.canvas = self._build_canvas()
         self.texts = []
@@ -120,11 +117,11 @@ class Env(tk.Tk):
                            width=WIDTH * UNIT)
 
         # 그리드 생성
-        for c in range(0, WIDTH * UNIT, UNIT):  # 0~400 by 80
+        for c in range(0, (WIDTH + 1) * UNIT, UNIT): 
             x0, y0, x1, y1 = c, 0, c, HEIGHT * UNIT
             canvas.create_line(x0, y0, x1, y1)
-        for r in range(0, HEIGHT * UNIT, UNIT):  # 0~400 by 80
-            x0, y0, x1, y1 = 0, r, HEIGHT * UNIT, r
+        for r in range(0, (HEIGHT + 1) * UNIT, UNIT):  
+            x0, y0, x1, y1 = 0, r, WIDTH * UNIT, r
             canvas.create_line(x0, y0, x1, y1)
 
         # 캔버스에 이미지 추가
@@ -147,8 +144,7 @@ class Env(tk.Tk):
         return rectangle, triangle, circle
 
     # 각각의 0-value 가 표시될 격자내에서의 상대적 위치
-    def text_value(self, row, col, contents, action, font='Helvetica', size=10,
-                   style='normal', anchor="nw"):
+    def text_value(self, row, col, contents, action, font='Helvetica', size=10, style='normal', anchor="nw"):
         if action == 0:
             origin_x, origin_y = 7, 42
         elif action == 1:
@@ -160,8 +156,7 @@ class Env(tk.Tk):
 
         x, y = origin_y + (UNIT * col), origin_x + (UNIT * row)
         font = (font, str(size), style)
-        text = self.canvas.create_text(x, y, fill="black", text=contents,
-                                       font=font, anchor=anchor)
+        text = self.canvas.create_text(x, y, fill="black", text=contents, font=font, anchor=anchor)
         return self.texts.append(text)
 
     # 프로그램 화면 상에  Q-value 를 표시
