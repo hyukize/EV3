@@ -8,6 +8,7 @@ import pickle
 import threading
 from queue import Queue
 import tkinter.font as tkFont
+import socket
 
 
 
@@ -28,7 +29,6 @@ START_POINT = (0, 0)
 END_POINT = (4, 4)
 OBSTACLES = [(2, 1), (2, 2), (1, 3), (3, 4), (4, 2)]
 
-
 #     GRID INFO
 #
 #      0 1 2 3 4
@@ -39,8 +39,53 @@ OBSTACLES = [(2, 1), (2, 2), (1, 3), (3, 4), (4, 2)]
 #  3   . . . . X
 #  4   . . X . E
 
-ENDED = False
+QUEUE1 = Queue()
+QUEUE2 = Queue()
 
+ended = False
+
+HOST = '0.0.0.0'
+PORT = 8000
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind((HOST, PORT))
+server.listen()
+client, addr = server.accept()
+
+print('Connected by', addr)
+
+
+def handle_socket():
+    while True:
+        data = QUEUE1.get()
+        if data == "episode_ended":
+            client.send(b"beep")
+        elif data == "return_ended":
+            client.send(b"beep")
+            if ended:
+                print("train ended")
+                break
+        else:
+            client.send(data.encode())
+        result = client.recv(1024).decode()
+        if result != "done":
+            raise ValueError
+    
+    client.send(b'yes')
+    client.recv(1024)
+    time.sleep(1)
+    while True:
+        data = QUEUE2.get()
+        if data == "episode_ended":
+            client.send(b"beep")
+        elif data == "return_ended":
+            client.send(b"beep")
+        else:
+            client.send(data.encode())
+        result = client.recv(1024).decode()
+        if result != "done":
+            raise ValueError
 
 
 class Env(tk.Tk):
@@ -260,6 +305,11 @@ class Env(tk.Tk):
             self.canvas.move(self.rectangle, base_action[1], base_action[0])
             self.canvas.tag_raise(self.rectangle)
 
+        if isend:
+            QUEUE1.put(data)
+        else:
+            QUEUE2.put(data)
+
         return self.cd_to_state(next_state), reward, done
 
 
@@ -292,6 +342,7 @@ class QLearningAgent:
             grid[OBSTACLE[0], OBSTACLE[1]] = "X"
         grid[END_POINT[0], END_POINT[1]] = "E"
         return grid
+
 
     def learn(self, state, action, reward, next_state):
         q_1 = self.q_table[state][action]
@@ -344,10 +395,51 @@ class QLearningAgent:
                 max_index_list.append(index)
         return np.random.choice(max_index_list)
 
+    # BFS(너비 우선 탐색법)를 통한 시작점으로의 최단거리 계산
+    def bfs(self, start_point):
+        start_point = tuple(start_point)
+        queue = deque([[start_point]])
+        seen = {start_point}
+        while queue:
+            path = queue.popleft()
+            y, x = path[-1]
+            if self.grid[y, x] == "S":
+                return path
+            for x2, y2 in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if 0 <= x2 < WIDTH and 0 <= y2 < HEIGHT and self.grid[y2, x2] != "X" and (y2, x2) not in seen:
+                    queue.append(path + [(y2, x2)])
+                    seen.add((y2, x2))
+
+    # 위에서 계산한 최단거리를 이용하여 시작점으로의 최단거리 복귀
+    @staticmethod
+    def return_home(path, isend):
+        if isend:
+            QUEUE2.put("episode_ended")
+            dir_dict = {"[-1  0]": "up", "[1 0]": "down", "[ 0 -1]": "left", "[0 1]": "right"}
+            direction_list = list(map(lambda x: dir_dict[str(np.array(x[0]) - np.array(x[1]))], zip(path[1:], path[:-1])))
+            for action in direction_list:
+                QUEUE2.put(action)
+            # 비프음 출력을 위한 EV3와의 송수신
+            QUEUE2.put("return_ended")
+            # 비프음 출력을 위한 EV3와의 송수신
+        else:
+            QUEUE1.put("episode_ended")
+            dir_dict = {"[-1  0]": "up", "[1 0]": "down", "[ 0 -1]": "left", "[0 1]": "right"}
+            direction_list = list(map(lambda x: dir_dict[str(np.array(x[0]) - np.array(x[1]))], zip(path[1:], path[:-1])))
+            for action in direction_list:
+                QUEUE1.put(action)
+            # 비프음 출력을 위한 EV3와의 송수신
+            QUEUE1.put("return_ended")
+            # 비프음 출력을 위한 EV3와의 송수신
 
 def main(load_saved_data):
+    global ended
     env = Env()
     agent = QLearningAgent()
+
+    socket_thread = threading.Thread(target=handle_socket) 
+    socket_thread.daemon = True 
+    socket_thread.start()
 
     if load_saved_data:
         agent.load_data()
@@ -380,9 +472,10 @@ def main(load_saved_data):
             if done:
                 print(f"Finished!! \ntotal reward : {total_reward}\n\n")
                 agent.save_data()
+                return_path = agent.bfs(state)
+                agent.return_home(return_path, isend)
                 break
-    with threading.Lock():
-        ENDED = True
+    ended = True
 
 
 if __name__ == "__main__":
