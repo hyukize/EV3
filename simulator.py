@@ -5,10 +5,11 @@ from PIL import Image
 from PIL.ImageTk import PhotoImage
 import pickle
 import threading
-import tkinter.font as tkFont
+import tkinter.font as tkfont
+
 
 LR = 0.1
-TIMESTEP = 0.2
+TIME_STEP = 0.2
 GAMMA = 0.9
 EPSILON = 0.8
 DECAY = 0.999
@@ -17,12 +18,12 @@ INITIAL_REWARD = 70
 TOTAL_EPISODE = 1000
 
 UNIT = 150  # 픽셀 수
-HEIGHT = 6  # 세로
+HEIGHT = 5  # 세로
 WIDTH = 5  # 가로
 
-START_POINT = (3, 0)
-END_POINT = (5, 4)
-OBSTACLES = [(1, 1), (1, 2), (2, 2), (3, 2), (3, 1  ), (4, 3)]
+START_POINT = (0, 0)
+END_POINT = (4, 4)
+OBSTACLES = [(1, 1), (1, 2), (2, 2), (3, 2), (3, 1), (4, 3)]
 
 #     GRID INFO
 #
@@ -40,21 +41,49 @@ ENDED = False
 class Env(tk.Tk):
     def __init__(self):
         super(Env, self).__init__()
-
-        self.time_step = TIMESTEP
+        self.time_step = TIME_STEP
         self.learning_rate = LR
         self.gamma = GAMMA
         self.decay = DECAY
         self.epsilon = EPSILON
         self.total_episode = TOTAL_EPISODE
-        self.episode = 1
         self.total_reward = INITIAL_REWARD
+        self.width = WIDTH
+        self.height = HEIGHT
+        self.unit = UNIT
+
+        self.fontStyle1 = tkfont.Font(family="Lucida Grande", size=20)
+        self.fontStyle2 = tkfont.Font(family="Lucida Grande", size=13)
+        self.fontStyle3 = tkfont.Font(family="Lucida Grande", size=17)
+
+        self.geometry("600x400")
+
+        self.width_entry = tk.Entry(self)
+        self.width_entry.bind("<Return>", self.set_width)
+        self.width_label = tk.Label(self, text=f"가로 : {self.width}", font=self.fontStyle2)
+        self.width_entry.pack()
+        self.width_label.pack()
+
+        self.height_entry = tk.Entry(self)
+        self.height_entry.bind("<Return>", self.set_height)
+        self.height_label = tk.Label(self, text=f"세로 : {self.height}", font=self.fontStyle2)
+        self.height_entry.pack()
+        self.height_label.pack()
+
+        close_button = tk.Button(self, text='Start', command=self.destroy)
+        close_button.pack()
+
+        self.mainloop()
+        super(Env, self).__init__()
+
+        self.episode = 1
         self.action_space = ['u', 'd', 'l', 'r']
+        self.actions = [0, 1, 2, 3]
         self.n_actions = len(self.action_space)
         self.title('Q Learning Simulator --- made by hyuk')
-        self.fontStyle1 = tkFont.Font(family="Lucida Grande", size=20)
-        self.fontStyle2 = tkFont.Font(family="Lucida Grande", size=13)
-        self.fontStyle3 = tkFont.Font(family="Lucida Grande", size=17)
+        self.fontStyle1 = tkfont.Font(family="Lucida Grande", size=20)
+        self.fontStyle2 = tkfont.Font(family="Lucida Grande", size=13)
+        self.fontStyle3 = tkfont.Font(family="Lucida Grande", size=17)
         self.start_image = PhotoImage(Image.open("img/start.png").resize((int(UNIT * 1 / 2), int(UNIT * 1 / 2))))
         self.bg_image = PhotoImage(Image.open("img/bg3.jpg").resize((WIDTH * UNIT * 2, HEIGHT * UNIT * 2)))
         self.geometry('{0}x{1}'.format((WIDTH + 4) * UNIT, max(5, HEIGHT) * UNIT))
@@ -62,12 +91,36 @@ class Env(tk.Tk):
         self.canvas = self._build_canvas()
         self.texts = []
         self.action_dict = {0: "up", 1: "down", 2: "left", 3: "right"}
-        self.epsilon_changed = False
+        self.q_table = {}
+        self.grid = self.make_grid()
+
+        for i in range(HEIGHT):
+            for j in range(WIDTH):
+                if (i, j) not in OBSTACLES:
+                    self.q_table[str([i, j])] = [.0] * len(self.actions)
+
+    def set_width(self, event):
+        width = self.width_entry.get()
+        if width.isdigit() and 3 <= int(width) <= 10:
+            self.width_entry.delete(0)
+            self.width = int(width)
+            self.width_label.config(text=f"가로 : {self.width}")
+            print(self.width)
+        else:
+            print("error")
+
+    def set_height(self, event):
+        height = self.height_entry.get()
+        if height.isdigit() and 3 <= int(height) <= 10:
+            self.height_entry.delete(0)
+            self.height = int(height)
+            self.height_label.config(text=f"세로 : {self.height}")
+            print(self.height)
+        else:
+            print("error")
 
     def _build_canvas(self):
-        canvas = tk.Canvas(self, bg='white',
-                           height=max(5, HEIGHT) * UNIT,
-                           width=(WIDTH + 4) * UNIT)
+        canvas = tk.Canvas(self, bg='white', height=max(5, HEIGHT) * UNIT, width=(WIDTH + 4) * UNIT)
 
         canvas.create_image(10, 10, image=self.bg_image)
 
@@ -106,9 +159,6 @@ class Env(tk.Tk):
         self.reward_label = tk.Label(self, text=f"남은 체력(Total_Reward) : {self.total_reward}", font=self.fontStyle3)
         self.reward_label.place(x=int((WIDTH + 2) * UNIT) - 135, y=base_height + 340)
 
-        self.button_obs = tk.Button(self, overrelief="solid", width=15, command=self.change_obs)
-        self.button_obs.place(x=int((WIDTH + 0.25) * UNIT), y=base_height + 390)
-
         for c in range(0, (WIDTH + 1) * UNIT, UNIT):
             x0, y0, x1, y1 = c, 0, c, HEIGHT * UNIT
             canvas.create_line(x0, y0, x1, y1)
@@ -138,8 +188,7 @@ class Env(tk.Tk):
         value = f"Gamma : {self.gamma}"
         self.gamma_label.config(text=value)
 
-    def update_epsilon(self, epsilon):
-        self.epsilon = epsilon
+    def update_epsilon(self):
         value = f"Epsilon : {self.epsilon : .3f}"
         self.epsilon_label.config(text=value)
 
@@ -152,11 +201,6 @@ class Env(tk.Tk):
         self.total_reward = total_reward
         value = f"남은 체력(Total Reward) : {total_reward}"
         self.reward_label.config(text=value)
-
-    def change_obs(self):
-        self.canvas.delete(self.triangles[-1])
-        self.triangles[-1] = self.canvas.create_image(*self.state_to_cd((3, 4))[::-1], image=self.shapes[1])
-        self.epsilon_changed = True
 
     @staticmethod
     def load_images():
@@ -183,7 +227,7 @@ class Env(tk.Tk):
         text = self.canvas.create_text(x, y, fill="black", text=contents, font=font, anchor=anchor)
         return self.texts.append(text)
 
-    def print_value_all(self, q_table):
+    def print_value_all(self):
         for i in self.texts:
             self.canvas.delete(i)
         self.texts.clear()
@@ -191,8 +235,8 @@ class Env(tk.Tk):
             for j in range(WIDTH):
                 for action in range(0, 4):
                     state = str([i, j])
-                    if state in q_table:
-                        temp = q_table[state][action]
+                    if state in self.q_table:
+                        temp = self.q_table[state][action]
                         self.text_value(i, j, round(temp, 2), action)
 
     @staticmethod
@@ -267,23 +311,6 @@ class Env(tk.Tk):
         time.sleep(0.03)
         self.update()
 
-
-class QLearningAgent:
-    def __init__(self):
-        self.actions = [0, 1, 2, 3]
-        self.learning_rate = LR
-        self.discount_factor = GAMMA
-        self.epsilon = EPSILON
-        self.decay = DECAY
-
-        self.q_table = {}
-        self.grid = self.make_grid()
-
-        for i in range(HEIGHT):
-            for j in range(WIDTH):
-                # if (i, j) not in OBSTACLES:
-                self.q_table[str([i, j])] = [.0] * len(self.actions)
-
     @staticmethod
     def make_grid():
         grid = np.full((HEIGHT, WIDTH), ".")
@@ -295,7 +322,7 @@ class QLearningAgent:
 
     def learn(self, state, action, reward, next_state):
         q_1 = self.q_table[state][action]
-        q_2 = reward + self.discount_factor * max(self.q_table[next_state])
+        q_2 = reward + self.gamma * max(self.q_table[next_state])
         self.q_table[state][action] += self.learning_rate * (q_2 - q_1)
 
     def get_action(self, state):
@@ -318,7 +345,7 @@ class QLearningAgent:
         with open("data.txt", "wb") as f:
             pickle.dump({"q_table": self.q_table,
                          "learning_rate": self.learning_rate,
-                         "discount_factor": self.discount_factor,
+                         "gamma": self.gamma,
                          "epsilon": self.epsilon,
                          "decay": self.decay}, f)
 
@@ -327,7 +354,7 @@ class QLearningAgent:
             data = pickle.load(f)
         self.q_table = data["q_table"]
         self.learning_rate = data["learning_rate"]
-        self.discount_factor = data["discount_factor"]
+        self.gamma = data["gamma"]
         self.epsilon = data["epsilon"]
         self.decay = data["decay"]
 
@@ -347,14 +374,13 @@ class QLearningAgent:
 
 def main(load_saved_data):
     env = Env()
-    agent = QLearningAgent()
 
     if load_saved_data:
-        agent.load_data()
+        env.load_data()
 
     for episode in range(TOTAL_EPISODE):
         env.update_episode(episode + 1)
-        print(f"episode : {episode + 1}, epsilon : {agent.epsilon}")
+        print(f"episode : {episode + 1}, epsilon : {env.epsilon}")
         if episode == TOTAL_EPISODE - 1:
             isend = True
         else:
@@ -364,28 +390,20 @@ def main(load_saved_data):
 
         while True:
             env.render()
-            action = agent.get_action(str(state))
+            action = env.get_action(str(state))
             next_state, reward, done = env.step(action, isend)
             total_reward += reward
             env.update_reward(total_reward)
             if total_reward <= 0:
                 done = True
-            agent.learning_rate = env.learning_rate
-            agent.gamma = env.gamma
-            if env.epsilon_changed:
-                env.epsilon = EPSILON/2
-                agent.epsilon = EPSILON/2
-                env.learning_rate = 0.5
-                env.learning_rate = 0.5
-                env.epsilon_changed = False
-            env.update_epsilon(agent.epsilon)
-            agent.learn(str(state), action, reward, str(next_state))
+            env.update_epsilon()
+            env.learn(str(state), action, reward, str(next_state))
             state = next_state
-            env.print_value_all(agent.q_table)
+            env.print_value_all()
 
             if done:
                 print(f"Finished!! \ntotal reward : {total_reward}\n\n")
-                agent.save_data()
+                env.save_data()
                 break
     with threading.Lock():
         ENDED = True
