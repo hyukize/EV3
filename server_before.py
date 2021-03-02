@@ -163,7 +163,7 @@ class Env(tk.Tk):
         rectangle = PhotoImage(
             Image.open("img/character.png").resize((int(UNIT * 2 / 3), int(UNIT * 2 / 3))))
         triangle = PhotoImage(
-            Image.open("img/cactus.png").resize((int(UNIT * 3 / 4), int(UNIT * 3 / 4))))
+            Image.open("img/obstacle.png").resize((int(UNIT * 3 / 4), int(UNIT * 3 / 4))))
         circle = PhotoImage(
             Image.open("img/end.png").resize((int(UNIT * 2 / 3), int(UNIT * 2 / 3))))
         return rectangle, triangle, circle
