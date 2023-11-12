@@ -2,4 +2,4 @@
 
 code by hyuk
 
-KBDLAB & HANSON TECH.
+KBDLAB & HANDSON TECH.
